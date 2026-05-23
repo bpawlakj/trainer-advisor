@@ -9,11 +9,22 @@
 .claude/settings.local.json
 .playwright-mcp/
 
-# Node / Next.js (will be relevant after scaffold)
+# Node / pnpm
 node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Next.js
 .next/
 out/
-dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
 
 # Env
 .env
@@ -21,17 +32,21 @@ dist/
 .env.*.local
 !.env.example
 
+# Vercel
+.vercel
+
 # Logs
 *.log
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
 
 # Coverage / test artifacts
 coverage/
 .nyc_output/
 
 # Misc
-*.tsbuildinfo
 .turbo/
+*.pem
