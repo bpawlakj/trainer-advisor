@@ -1,0 +1,48 @@
+# Trainer Advisor — production docker-compose on the Hetzner CX22 box.
+#
+# Lives at /home/deploy/app/docker-compose.yml on the server (NOT executed
+# locally for dev — local dev runs `pnpm dev` directly). GitHub Actions
+# ssh-deploys this file to the box on first deploy, then later deploys just
+# pull a new image and `docker compose up -d` to roll over.
+#
+# Secrets: env_file points at /home/deploy/app/.env which is provisioned by
+# the deploy workflow from GitHub Actions secrets. It is NEVER committed.
+
+services:
+  web:
+    image: ghcr.io/bpawlakj/trainer-advisor:latest
+    container_name: trainer-advisor-web
+    restart: unless-stopped
+    env_file: .env
+    # Only Caddy talks to the app; we don't expose 3000 on the host.
+    expose:
+      - "3000"
+    healthcheck:
+      # Wget is in node:alpine. If the in-process app responds, the container
+      # is healthy. Caddy waits for this before routing traffic.
+      test: ["CMD-SHELL", "wget --quiet --spider --tries=1 http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: trainer-advisor-caddy
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Persist ACME certs across container restarts.
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

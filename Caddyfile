@@ -1,0 +1,24 @@
+# Trainer Advisor — Caddy reverse proxy on the Hetzner CX22 box.
+#
+# Replace `your-domain.example` with the actual domain BEFORE deploying.
+# Caddy auto-fetches & renews Let's Encrypt certs when the domain's A record
+# points at this box. HTTP requests are auto-redirected to HTTPS.
+
+your-domain.example {
+    encode gzip zstd
+
+    # Security headers — sane defaults; refine later when CSP becomes
+    # specific to actual asset domains.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Caddy adds its own Server header by default; hide it.
+        -Server
+    }
+
+    reverse_proxy web:3000 {
+        # Pass real client IP through so Next.js / app logs see it.
+        header_up X-Real-IP {remote_host}
+    }
+}

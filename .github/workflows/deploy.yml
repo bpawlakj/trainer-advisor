@@ -1,0 +1,154 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Avoid stomping concurrent deploys — newer push cancels the prior in-flight run.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build & push image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # GHCR
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_sha: ${{ steps.meta.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      # Local sanity build BEFORE Docker — catches TS/Next errors fast.
+      - name: Next.js build
+        run: pnpm build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # GHCR is currently amd64-only for free private packages; matches CX22.
+          platforms: linux/amd64
+
+  deploy:
+    name: SSH deploy to Hetzner
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout (for compose + Caddyfile)
+        uses: actions/checkout@v4
+
+      - name: Sync compose stack to the box
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: "docker-compose.yml,Caddyfile"
+          target: /home/deploy/app
+          overwrite: true
+
+      - name: Render .env from secrets
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            umask 077
+            cat > /home/deploy/app/.env <<ENVFILE
+            APP_URL=${{ secrets.APP_URL }}
+            NODE_ENV=production
+            PORT=3000
+            SUPABASE_DATABASE_URL=${{ secrets.SUPABASE_DATABASE_URL }}
+            SUPABASE_DIRECT_URL=${{ secrets.SUPABASE_DIRECT_URL }}
+            BETTER_AUTH_SECRET=${{ secrets.BETTER_AUTH_SECRET }}
+            BETTER_AUTH_URL=${{ secrets.APP_URL }}
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+            LIBSODIUM_MASTER_KEY=${{ secrets.LIBSODIUM_MASTER_KEY }}
+            RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+            RESEND_FROM=${{ secrets.RESEND_FROM }}
+            R2_ACCOUNT_ID=${{ secrets.R2_ACCOUNT_ID }}
+            R2_ACCESS_KEY_ID=${{ secrets.R2_ACCESS_KEY_ID }}
+            R2_SECRET_ACCESS_KEY=${{ secrets.R2_SECRET_ACCESS_KEY }}
+            R2_BUCKET=${{ secrets.R2_BUCKET }}
+            ENVFILE
+
+      - name: Pull image & restart compose
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: deploy
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /home/deploy/app
+            # GHCR pull needs auth even for the deploy user — re-use the
+            # GitHub Actions GITHUB_TOKEN one-shot, passed via SSH env.
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            docker compose pull
+            docker compose up -d
+            docker image prune -f
+
+      - name: Smoke test
+        run: |
+          # Wait up to 60s for the new container to be healthy + reachable.
+          for i in {1..12}; do
+            if curl -fsS "${{ secrets.APP_URL }}/api/health" >/dev/null; then
+              echo "Health check OK after $((i*5))s"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Smoke test failed — /api/health never returned 200"
+          exit 1

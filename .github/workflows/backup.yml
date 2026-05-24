@@ -1,0 +1,33 @@
+name: backup
+
+on:
+  schedule:
+    # 02:00 UTC = 03:00/04:00 Europe/Warsaw — low-traffic window.
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  pg-dump-to-r2:
+    name: pg_dump → R2
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (for backup script)
+        uses: actions/checkout@v4
+
+      - name: Install postgres-client (matches Supabase server version)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-16
+
+      - name: Run backup
+        env:
+          SUPABASE_DIRECT_URL: ${{ secrets.SUPABASE_DIRECT_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ENC_PASS: ${{ secrets.R2_ENC_PASS }}
+        run: bash scripts/backup-postgres.sh

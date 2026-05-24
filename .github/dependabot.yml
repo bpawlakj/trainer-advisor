@@ -1,0 +1,55 @@
+version: 2
+
+updates:
+  # npm packages — weekly grouped PRs, separate channels for major upgrades.
+  # Biome and Lefthook are version-pinned by project policy (AGENTS.md
+  # Workflow); Dependabot's ignore list keeps them out of automated PRs.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "next-*"
+          - "@next/*"
+      react:
+        patterns:
+          - "react"
+          - "react-*"
+          - "@types/react*"
+      types:
+        patterns:
+          - "@types/*"
+        exclude-patterns:
+          - "@types/react*"
+    ignore:
+      - dependency-name: "@biomejs/biome"
+      - dependency-name: "lefthook"
+      - dependency-name: "@biomejs/*"
+
+  # GitHub Actions — pin to SHA in deploy.yml is best practice but Dependabot
+  # auto-bumps when a new tag lands.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 3
+
+  # Docker base images in Dockerfile.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Warsaw
+    open-pull-requests-limit: 2

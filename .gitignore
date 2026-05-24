@@ -30,10 +30,15 @@ next-env.d.ts
 .env
 .env.local
 .env.*.local
+.env.production
 !.env.example
 
 # Vercel
 .vercel
+
+# Docker / Caddy runtime state (when running compose locally for debugging)
+caddy_data/
+caddy_config/
 
 # Logs
 *.log

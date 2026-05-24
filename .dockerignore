@@ -1,0 +1,48 @@
+# Keep Docker build context lean — only the Next.js source belongs in the image.
+# Everything else either reproduces from the build, or is dev-only, or is a secret.
+
+# --- VCS / IDE / OS ---
+.git
+.github
+.idea
+.vscode
+.DS_Store
+
+# --- Node / package manager intermediates ---
+node_modules
+.next
+.turbo
+out
+build
+dist
+*.tsbuildinfo
+
+# --- Logs ---
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+.pnpm-debug.log*
+
+# --- Tests / coverage ---
+coverage
+.nyc_output
+playwright-report
+test-results
+
+# --- Secrets — runtime values come from env_file at compose time ---
+.env
+.env.local
+.env.*.local
+.env.production
+
+# --- Docs / agent artifacts — not needed at runtime ---
+docs
+AGENTS.md
+CLAUDE.md
+README.md
+
+# --- Local-only ---
+.claude
+.playwright-mcp
+.nvmrc
