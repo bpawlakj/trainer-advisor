@@ -1,3 +1,5 @@
+> **Roadmap ref:** F-01 in [`docs/roadmap.md`](../../roadmap.md). This initiative IS the Infrastructure bootstrap foundation; do not re-scope here.
+
 # Plan — Infrastructure Registration & Preparation Files
 
 ## Context
