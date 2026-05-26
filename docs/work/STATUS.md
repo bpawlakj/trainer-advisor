@@ -14,6 +14,7 @@ _None._
 |----|------------|-------|---------|
 | 000 | [bootstrap](000-bootstrap/) | 0/0 (not atomized) | — |
 | 001 | [infra-bootstrap](001-infra-bootstrap/) | 0/12 | 2026-05-24 |
+| 002 | [app-skeleton](002-app-skeleton/) | 0/0 (not atomized) | 2026-05-26 |
 
 ## Done
 
