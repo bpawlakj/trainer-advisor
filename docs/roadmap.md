@@ -2,23 +2,28 @@
 
 ## Vision recap
 
-Trainer Advisor is a Polish-language, mobile-first PWA that turns Google Calendar into a single-trainer attendance and revenue ledger: the trainer signs in with Google, sees today's session list with a one-tap binary attendance toggle (came / didn't come — never a third "late" or "excused" state), and at month-end copies a per-client PLN summary into their messenger of choice. v1 is single-tenant, learning-first (10xDevs Arena certification, not commercial), and aggressively scoped — no scheduler, no calendar write-back, no payments, no 2FA. The roadmap follows **ordering A (north-star-first)**: foundations first, then the three user stories in PRD order (US-03 → US-01 → US-02), with client management folded into US-03's first-sync mapping and finished as a thin slice after the north-star path is demoable. Rationale: main_goal=NAUKA and top_blocker=TIME both reward reaching the end-to-end demo as fast as possible — every slice before S-03 has zero standalone business value (no clients without Google sync, no attendance without sessions, no summary without attendance), so front-loading client-CRUD UI would burn time on a screen the trainer barely touches after onboarding.
+Trainer Advisor is a Polish-language, mobile-first PWA that turns Google Calendar into a single-trainer attendance and revenue ledger: the trainer signs in with Google, sees today's session list with a one-tap binary attendance toggle (came / didn't come — never a third "late" or "excused" state), and at month-end copies a per-client PLN summary into their messenger of choice. v1 is single-tenant, learning-first (10xDevs Arena certification, not commercial), and aggressively scoped — no scheduler, no calendar write-back, no payments, no 2FA. The roadmap follows **ordering A (north-star-first)** with a **local-first execution model**: minimal foundation for local dev (F-01) → app skeleton runs locally (F-02) → vertical slices S-01..S-04 ship locally → cloud deploy as a separate foundation (F-03) on demand. Rationale: main_goal=NAUKA and top_blocker=TIME both reward reaching the end-to-end demo as fast as possible — and "local demo working" is a stronger forcing function than "cloud deploy live". Cloud deploy unlocks **production launch / sharing**, not feature work. Slice ordering inside the app: US-03 → US-01 → US-02 (PRD order), with client management folded into US-03's first-sync and finished as S-04.
 
 ## Foundations
 
-### F-01: Infrastructure bootstrap (Hetzner + Supabase + GHCR + Caddy + Resend + R2)
-- **Outcome:** Production VM reachable on the registered domain over HTTPS, GHCR image deploys via GitHub Actions, Supabase project with `pg_cron` + `pg_net` extensions provisioned, secrets wired, UptimeRobot pinging /api/health — i.e. an empty Next.js shell is live and observable.
-- **Unlocks:** F-02, S-01
-- **Status:** in-progress (see `docs/work/001-infra-bootstrap/`, 12 atomic tasks pending — do not re-plan here)
+### F-01: Local-dev unblockers (Supabase project)
+- **Outcome:** A Supabase project exists in `Central EU (Frankfurt)` with `pg_cron` + `pg_net` extensions enabled; `SUPABASE_DATABASE_URL` (port 6543 pooled) and `SUPABASE_DIRECT_URL` (port 5432 for migrations) are in local `.env.local`; `LIBSODIUM_MASTER_KEY` generated locally via `openssl rand -hex 32`. Together these are the minimum a developer needs to run `pnpm dev` against a real backend and `drizzle-kit migrate` successfully. No domain, no Hetzner, no GitHub Actions — that's all F-03.
+- **Unlocks:** F-02
+- **Status:** ready (small initiative, see `docs/work/003-local-dev-unblockers/`)
 
 ### F-02: App skeleton — Better Auth, Drizzle schema, next-intl, route groups
-- **Outcome:** Better Auth configured with `encryptOAuthTokens` and Google provider (read-only Calendar scope only); libsodium `crypto_secretbox` helper for refresh-token at-rest encryption; Drizzle 7-table schema in `src/db/schema/` generated and migrated against Supabase (every business table has `trainer_id NOT NULL` from day one); Supavisor pooled connection (`prepare: false`) for app, direct connection for migrations; next-intl wired with `[locale]` segment and `src/messages/pl.json` as the single Polish string catalog; route groups `(marketing)`, `(auth)`, `(protected)` scaffolded with a working `requireAuth()` per-page guard; pg_cron + pg_net job calling `/api/sync` every 5 min defined but no-op until S-02.
+- **Outcome:** Better Auth configured with `encryptOAuthTokens` and Google provider (read-only Calendar scope only); libsodium `crypto_secretbox` helper for refresh-token at-rest encryption; Drizzle 7-table schema in `src/db/schema/` generated and migrated against Supabase (every business table has `trainer_id NOT NULL` from day one); Supavisor pooled connection (`prepare: false`) for app, direct connection for migrations; next-intl wired with `[locale]` segment and `src/messages/pl.json` as the single Polish string catalog; route groups `(marketing)`, `(auth)`, `(protected)` scaffolded with a working `requireAuth()` per-page guard; pg_cron + pg_net job calling `/api/sync` every 5 min defined but no-op until S-02. **Runs locally end-to-end** — no cloud deploy required.
 - **Unlocks:** S-01, S-02, S-03, S-04
-- **Status:** ready (blocked on F-01 reaching `T-011` first-deploy smoke test)
+- **Status:** ready (blocked on F-01 done, see `docs/work/002-app-skeleton/`)
+
+### F-03: Cloud deploy infrastructure
+- **Outcome:** Production deployment ready end-to-end: domain registered, Hetzner CX22 VM provisioned with cloud-init server-setup, DNS A/AAAA records propagated, Caddy reverse proxy with Let's Encrypt TLS, GHCR image push via GitHub Actions, deploy SSH key + GH Actions secrets wired, Resend domain DKIM verified, Cloudflare R2 backup bucket, UptimeRobot monitor pinging /api/health. **Does NOT unlock slice work** — slices ship locally. F-03 unlocks "publish the URL to 10xDevs Arena" / production launch only.
+- **Unlocks:** production launch (closes M1L5 cert milestone)
+- **Status:** in-progress — see `docs/work/001-infra-bootstrap/` (this is the original 12-task plan, minus T-004 Supabase which moved to F-01 in `003-local-dev-unblockers/`).
 
 ## Slices
 
-> Ordering A: each slice ships a vertical the trainer can open on their phone and verify. S-01 → S-02 → S-03 is the north-star path end-to-end; S-04 closes the loop on client management once real data exists to edit.
+> Ordering A: each slice ships a vertical the trainer can open on their phone and verify. S-01 → S-02 → S-03 is the north-star path end-to-end; S-04 closes the loop on client management once real data exists to edit. **All slices develop and verify locally** — F-03 (cloud deploy) is independent of slice work.
 >
 > Dev-time guards (Biome, Lefthook, structured logging beyond `console.log`, observability beyond UptimeRobot) are **overlapping work** done inside F-02 and refined during slices — they do not get their own Foundation row because they unlock nothing concrete and "orphan foundations" are an explicit code smell in the roadmap contract.
 

@@ -1,7 +1,7 @@
 ---
 id: T-005
 title: Google Cloud Console OAuth setup
-status: pending
+status: obsolete
 plan: ../plan-v2.md
 created: 2026-05-25
 completed: null
@@ -10,6 +10,10 @@ depends_on: [T-001]
 blocks: [T-009]
 plan_anchor: A5-google-cloud-console
 ---
+
+## Obsoleted on 2026-05-26
+
+Deferred to **S-01 (Google connect + first sync)** — the OAuth flow lives entirely in S-01, and F-02 verification doesn't actually need a working OAuth client (the F-02 verification step that opened the Google consent screen is being moved to S-01 verification). When you start S-01, the first task there will be Google Cloud Console OAuth setup with the read-only `calendar.events.readonly` scope and the production redirect URI (which needs the domain from F-03 T-001 to exist — chicken-and-egg, resolved by setting up OAuth client only after F-03 T-001 lands, or using a temporary localhost redirect for early S-01 development).
 
 ## Scope
 

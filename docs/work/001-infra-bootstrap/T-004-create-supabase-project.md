@@ -1,7 +1,7 @@
 ---
 id: T-004
 title: Create Supabase project + enable extensions
-status: pending
+status: obsolete
 plan: ../plan-v2.md
 created: 2026-05-25
 completed: null
@@ -10,6 +10,10 @@ depends_on: []
 blocks: [T-009]
 plan_anchor: A4-supabase
 ---
+
+## Obsoleted on 2026-05-26
+
+Moved to F-01 local-dev unblockers — see [`docs/work/003-local-dev-unblockers/plan.md`](../003-local-dev-unblockers/plan.md) Phase A. Roadmap restructured to surface "local first, cloud second" execution model. This task's scope (Supabase project + `pg_cron`/`pg_net` extensions + connection strings) is now F-01 work, not F-03 cloud-deploy work.
 
 ## Scope
 

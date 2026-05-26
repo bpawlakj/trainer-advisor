@@ -1,4 +1,6 @@
-> **Roadmap ref:** F-01 in [`docs/roadmap.md`](../../roadmap.md). This initiative IS the Infrastructure bootstrap foundation; do not re-scope here.
+> **Roadmap ref:** F-03 in [`docs/roadmap.md`](../../roadmap.md) — **cloud deploy infrastructure** (was F-01 until 2026-05-26 restructure for local-first execution model).
+>
+> **Scope change:** T-004 (Supabase) and T-005 (Google OAuth) were moved out — T-004 to F-01 local-dev unblockers in [`docs/work/003-local-dev-unblockers/`](../003-local-dev-unblockers/), T-005 deferred to S-01. Their `status: obsolete` in this folder is a tombstone, not lost work. Remaining 10 tasks in this initiative are pure cloud-deploy (Hetzner, domain, DNS, Caddy, GHCR, Actions, R2, UptimeRobot, Resend DKIM).
 
 # Plan — Infrastructure Registration & Preparation Files
 

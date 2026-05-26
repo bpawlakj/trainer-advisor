@@ -12,9 +12,9 @@ F-02 is the second foundation (after F-01 infrastructure bootstrap). It transfor
 - **Routing** — Three route groups (`(marketing)`, `(auth)`, `(protected)`) with `requireAuth()` per-page guard; middleware does optimistic cookie check + locale resolution
 - **Sync stub** — `/api/sync` endpoint that pg_cron will hit every 5 min via pg_net; no-op until S-02 (just authenticates the caller + logs)
 
-F-02 is **blocked on F-01** reaching at least T-005 (Supabase project exists, connection URLs in `.env.local`). It does NOT need T-011 (first deploy) — F-02 develops locally against Supabase's connection strings. F-01 must finish before F-02 ships to production, not before F-02 starts.
+F-02 is **blocked on F-01 (local-dev unblockers)** being done — see [`docs/work/003-local-dev-unblockers/plan.md`](../003-local-dev-unblockers/plan.md). That's a small initiative (Supabase project + libsodium key in `.env.local`, ~30 min wall-clock). F-02 does NOT need F-03 (cloud deploy in `001-infra-bootstrap/`) — F-02 runs entirely on localhost against Supabase. Cloud deploy is a separate downstream milestone.
 
-After F-02 lands, S-01 (Google connect + first sync) is unblocked — all foundations are in place. F-02 itself ships no user-facing feature beyond a Polish marketing landing page and a working auth form — its value is downstream.
+After F-02 lands, S-01 (Google connect + first sync) is unblocked. S-01 will be the first slice to set up Google OAuth credentials (the F-02 verification's OAuth consent-screen check has been moved to S-01, since it requires a redirect URI which is easier to manage once OAuth is the active scope of work). F-02 itself ships no user-facing feature beyond a Polish marketing landing page and a working email-password auth form — its value is downstream.
 
 ## Stack reference (locked by analyses)
 
@@ -189,12 +189,14 @@ End-to-end smoke test after F-02 is implemented. All 10 must pass before flippin
 4. **Supavisor pooled connection works:** `pnpm dev`, hit `/api/health` → 200 (proves no prepared-statement errors). If `prepare: false` is missing from `src/db/index.ts`, this fails on first DB query with a Supavisor error.
 5. **Sign-up via email/password:** Visit `/login`, click "Register", enter email + password, submit → row appears in `trainers` (or whatever Better Auth's primary user table is named). Reset-password email arrives via Resend (use a real email; check inbox).
 6. **Sign-in + protected redirect:** Sign out. Visit `/today` → middleware redirects to `/login`. Sign in → `/today` renders Polish placeholder text.
-7. **Google OAuth opens consent screen:** On `/today` placeholder, click "Connect Google" → browser opens Google's consent screen showing only the `calendar.events.readonly` scope. (Don't complete the consent — just verify scope is read-only.)
-8. **Token encryption:** Complete a Google OAuth flow with a test account. Inspect a `trainer_google_tokens` row in Supabase Studio — `nonce` and `ciphertext` are non-empty bytea; the plaintext token does NOT appear anywhere in the row, logs, or analytics.
+7. **Google provider scaffolded:** Better Auth config has Google provider with `scopes: ['https://www.googleapis.com/auth/calendar.events.readonly']` declared. **Full OAuth-flow verification (real consent screen + token encryption + bytea-in-DB check) is deferred to S-01 verification** — it requires a Google Cloud Console OAuth client which is S-01 setup work, not F-02.
+8. **`trainer_google_tokens` table accepts bytea writes:** unit test or psql insert proves the table schema accepts `(nonce, ciphertext)` bytea pair without errors. End-to-end "real Google token lands encrypted" check is in S-01.
 9. **i18n loads Polish:** Visit `/` → page heading and visible strings are Polish (from pl.json). No raw `Common.title` placeholder leaks to UI.
 10. **Sync stub responds correctly:** `curl -X POST -H "Authorization: Bearer $PG_NET_TOKEN" http://localhost:3000/api/sync` → 200 OK with `{ status: 'ok', synced: 0 }`. Without the token, or with wrong token → 401.
 
 If all 10 pass: F-02 status → `done` in `docs/roadmap.md`. S-01 unblocked. STATUS.md auto-regenerates on the F-02 initiative's last task commit.
+
+Note: verification step 5 mentions "Reset-password email arrives via Resend" — for **local dev**, Better Auth can be configured to log password-reset URLs to console instead of sending real emails. Real Resend integration is exercised when F-03 (cloud deploy) lands + Resend domain DKIM is verified. Adjust step 5 expectation: in pure local mode, watch the console output for the reset URL; real-email send is F-03 verification material.
 
 ## Out of scope for this plan
 
