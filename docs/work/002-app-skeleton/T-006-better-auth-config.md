@@ -13,7 +13,7 @@ plan_anchor: C2-C4
 
 ## Scope
 
-Wire Better Auth as the app's identity layer: email/password + Google OAuth (read-only Calendar scope, encrypted refresh tokens via libsodium) + DB-backed sessions. Then expose a Next.js route handler for Better Auth's API endpoints and server-side `requireAuth()` / `getOptionalAuth()` helpers for Server Components and Route Handlers.
+Wire Better Auth as the app's identity layer: **Google OAuth as sole identity provider** (read-only Calendar scope, encrypted refresh tokens via libsodium) + DB-backed sessions. NO email/password — `emailAndPassword.enabled: false` is explicit. Expose a Next.js route handler for Better Auth's API endpoints and server-side `requireAuth()` / `getOptionalAuth()` helpers for Server Components and Route Handlers.
 
 ## Approach
 
@@ -32,24 +32,10 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: 'pg' }),
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
+  // Google is the SOLE identity provider — no email/password, no register flow,
+  // no password-reset emails. Per PRD FR-001 (Google-only auth).
   emailAndPassword: {
-    enabled: true,
-    sendResetPassword: async ({ user, url }) => {
-      // F-02: minimal plain-text Resend send.
-      // For LOCAL dev, log to console (skip real send when RESEND_API_KEY is empty/test).
-      if (!env.RESEND_API_KEY || env.RESEND_API_KEY.startsWith('test_')) {
-        console.log(`[reset-password] ${user.email} → ${url}`);
-        return;
-      }
-      const { Resend } = await import('resend');
-      const resend = new Resend(env.RESEND_API_KEY);
-      await resend.emails.send({
-        from: env.RESEND_FROM,
-        to: user.email,
-        subject: 'Resetowanie hasła — Trainer Advisor',
-        text: `Cześć, kliknij ten link aby zresetować hasło: ${url}`,
-      });
-    },
+    enabled: false,
   },
   socialProviders: {
     google: {
@@ -122,6 +108,9 @@ export async function getOptionalAuth() {
 ## Acceptance
 
 - [ ] `src/lib/auth.ts` exists, exports `auth` + `Session` type
+- [ ] `emailAndPassword.enabled: false` is explicit in config (grep for it)
+- [ ] NO `sendResetPassword` callback in config (Google handles password recovery)
+- [ ] NO `import { Resend }` in `src/lib/auth.ts` (Resend not used in v1)
 - [ ] Google provider declared with `scope: ['https://www.googleapis.com/auth/calendar.events.readonly']` — verify by `grep -c 'calendar.events.readonly' src/lib/auth.ts` returns 1
 - [ ] `encryptOAuthTokens` config calls into `src/lib/crypto.ts` (no inline crypto)
 - [ ] `src/app/api/auth/[...all]/route.ts` exists, exports GET + POST via `toNextJsHandler(auth)`
@@ -133,7 +122,7 @@ export async function getOptionalAuth() {
 
 - The Better Auth Drizzle adapter expects specific table names (`user`, `session`, `account`, `verification`). We renamed `user` → `trainers` in our schema. **Verify with Better Auth docs** whether the adapter supports table-name customization, OR adjust schema in T-003 to use `user` instead of `trainers`. If forced to use `user`, update `clients.trainer_id` FK to point at `user.id` (rename column? Or keep `trainer_id` as the variable name — table-side FK is to `user`, code-side semantic is `trainerId`).
 - `Session` type-infer pattern: Better Auth exposes `$Infer.Session` which gives the typed session shape including the `user` field.
-- The minimal Polish reset-password email lands here (`text: 'Cześć, kliknij...'`). When React Email is wired later (S-01+), this becomes a proper React component.
+- No reset-password email in v1 — Google handles forgotten-password / account-recovery on their side. If a user can't access their Google account, they can't access the app (and they wouldn't have it set up anyway since the same Google account hosts their Calendar).
 - Production `BETTER_AUTH_URL` value comes from F-03. For F-02 local dev: `http://localhost:3000`.
 - `auth.api.getSession({ headers })` is the server-side session getter. Don't reach into cookies directly.
 - `requireAuth()` is called server-side in Server Components and Route Handlers. Client-side auth state should use Better Auth's React client (`useSession`) — but F-02 doesn't ship any client component that needs it.

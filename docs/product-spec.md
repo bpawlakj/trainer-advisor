@@ -60,7 +60,7 @@ Two adjacent moments are intentionally out of scope: (1) "week-start planning" �
 
 ### US-01: Trainer marks attendance immediately after a session ends
 
-- **Given** a trainer who has just finished a session with a client, with their phone in hand, and the app already authenticated (both email/password and Google connected)
+- **Given** a trainer who has just finished a session with a client, with their phone in hand, and the app already authenticated (signed in via Google — single sign-on flow per FR-001)
 - **When** they open the app — it lands on the daily view (today's Google Calendar events)
 - **Then** they see the just-finished session as "unmarked", tap it once to set "came" (green check), and the state is persisted with visible confirmation within 1 second
 
@@ -87,31 +87,31 @@ Two adjacent moments are intentionally out of scope: (1) "week-start planning" �
 - Grand-total view (FR-016) for the same month is reachable in ≤ 2 taps from any per-client card.
 - The dashboard for past months is reachable via month navigation (FR-018), and "Copy summary" works identically on historical months.
 
-### US-03: Trainer connects Google for the first time and the daily view starts populating
+### US-03: Trainer signs in for the first time via Google and the daily view starts populating
 
-- **Given** a trainer who has just signed up to the app and has not yet connected Google
-- **When** they open the daily view, it shows an empty state with a clear "Connect Google Calendar" CTA
-- **And when** they tap the CTA, they are taken through the standard Google authorization consent flow (FR-002), granting read-only calendar access
-- **Then** on returning to the app, today's Google Calendar events appear in the daily view within 5 seconds (initial sync)
+- **Given** a trainer who has never used the app before
+- **When** they land on the marketing page and tap "Zaloguj przez Google", they are taken through Google's standard authorization consent flow (FR-001 + FR-002), granting the app `calendar.events.readonly` scope on their primary calendar
+- **Then** on returning to the app, they are signed in (trainer account auto-created on first sign-in) and today's Google Calendar events appear in the daily view within 5 seconds (initial sync)
 
 #### Acceptance Criteria
 
-- The empty-state CTA is not buried in settings; it is on the daily view itself.
+- "Zaloguj przez Google" is the **single** call-to-action on the marketing landing page and login page — no register form, no email+password fallback, no password-reset link.
 - The authorization flow opens in the system browser (not an in-app webview) so Google's anti-phishing protections apply.
-- On successful return from authorization, the trainer does not have to manually trigger sync — events appear automatically.
-- If authorization is cancelled or fails, the app returns to the empty state with a retry CTA; no half-connected limbo state.
-- Any Google Calendar event whose attendee email matches an existing client record is mapped on first sync (FR-009).
+- On successful return from authorization, the trainer does not have to manually trigger sync — events appear automatically (initial sync runs as part of the post-login redirect).
+- If authorization is cancelled or fails, the app returns to the marketing landing page with the "Zaloguj przez Google" CTA still present; no half-authenticated limbo state.
+- Any Google Calendar event whose attendee email matches an existing client record is mapped on first sync (FR-009). First-sign-in's first sync may auto-create client rows from attendee emails — see Open Question 4.
 
 ## Functional Requirements
 
 ### Authentication & Google connection
 
-- FR-001: Trainer can sign up and sign in to the app with email + password, with a standard reset-by-email flow. Priority: must-have
+- FR-001: Trainer signs in to the app via **Google OAuth** — single sign-on flow. The same authorization grants the app read-only access to their primary Google Calendar (see FR-002). There is no separate email + password layer; the Google identity IS the app identity. The first sign-in creates the trainer's account; subsequent sign-ins re-authenticate. Priority: must-have
+  > Socratic: counter-argument considered — "support email + password as a fallback for trainers without Google". Resolution: rejected for v1. The primary persona already uses Google Calendar (entire product is layered on it), so they have a Google account by definition. Forcing two identity options doubles the auth surface for marginal value. Email/password can be added in v2 if a non-Google subcontractor scenario materializes.
 
-- FR-002: Trainer can connect their Google account via the standard authorization flow to grant the app **read-only** access to their primary Google Calendar. The app stores only the authorization refresh token (encrypted at rest), not the Google password. Priority: must-have
-  > Socratic: counter-argument considered — "force authorization at signup (no app-without-Calendar state) vs. let trainer try the app first and connect later?". Resolution: connect-later. Forcing authorization at signup adds friction before the trainer sees value; the app's empty-state UI must explain that the daily view will populate only after Google is connected.
+- FR-002: The Google OAuth scope requested is `https://www.googleapis.com/auth/calendar.events.readonly` — read-only on the trainer's primary calendar. The app stores only the OAuth refresh token (encrypted at rest via libsodium `crypto_secretbox`), never the trainer's Google password. The OAuth consent screen presents this scope once, at first sign-in. Priority: must-have
+  > Socratic: counter-argument considered — "request additional scopes upfront (e.g. profile picture, contacts)". Resolution: rejected. Minimum scope = minimum trust required = faster Google review later. Adding scope = product decision, not implementation detail.
 
-- FR-003: Trainer can disconnect their Google account from the app. Existing attendance records persist; no new Google Calendar events are pulled until the trainer reconnects. Priority: must-have
+- FR-003: Trainer can revoke the app's Google authorization at any time, either inside the app (a "Sign out & revoke access" action) or via their Google account dashboard (`myaccount.google.com/permissions`). Revocation logs the trainer out and stops new calendar syncs; existing attendance records remain in the database, recoverable when the trainer re-authorizes (their `trainer_id` is preserved across re-auth). Priority: must-have
 
 ### Client management
 
@@ -189,19 +189,19 @@ The rule explicitly does NOT classify cancellations by their cause (in-regulatio
 
 ## Access Control
 
-**MVP authentication: trainer only, two layers.**
+**MVP authentication: trainer only, single layer (Google OAuth).**
 
-1. **App account: email + password.** A single trainer account is created at sign-up using email + password, with a standard reset-by-email flow. After sign-in the trainer has full access to their own data; there is no role split (no admin / no member tiers) because there is only one user.
-2. **Google account connection: standard authorization flow.** After signing in to the app, the trainer authorizes the app to read their Google Calendar via Google's standard authorization consent screen. The app stores only the authorization refresh token (not the trainer's Google password). The grant requested is **read-only** access to events on the trainer's primary calendar — no write scope, no other Google data. The trainer can revoke the grant at any time, either inside the app or via their Google account dashboard.
+The trainer signs in via Google OAuth — a single authorization consent screen that simultaneously creates/restores their trainer account AND grants the app `calendar.events.readonly` scope on their primary Google Calendar. The app stores only the OAuth refresh token (encrypted at rest via libsodium `crypto_secretbox`), never the trainer's Google password. There is no email + password layer, no role split (no admin / no member tiers), no separate "connect Google" step after sign-in — it's all one flow.
 
 **Clients are not users.** Clients are addressable as data subjects — the trainer creates and edits their records, sees them in Google Calendar events as attendees, and pushes them monthly summary messages — but they never log in to the application in v1. No client portal, no per-client login link.
 
 **Implications carried forward:**
 
-- The credential surface is two-tier: app password (compromise exposes the trainer's client list and revenue history) and Google authorization token (compromise exposes calendar read access). Both are sensitive but blast radius is one tenant.
-- Password reset by email is in scope (any email+password system needs it). Password-strength rules and 2FA are open for downstream decision but are not v1 commitments.
-- If the trainer revokes the Google authorization grant, the app must degrade gracefully — existing attendance records remain visible, but no new events can be pulled, and the daily view is empty. Surface this state clearly with a "reconnect Google" prompt.
-- The eventual multi-trainer / subcontractor extension will require a richer access model. Each trainer would connect their own Google account; data isolation is per-trainer. This is post-MVP; the v1 design should not box itself out of that future, but does not need to implement it.
+- The credential surface is single-tier: Google OAuth refresh token (compromise exposes calendar read access + app account access). Sensitive but blast radius is one tenant. 2FA is Google's responsibility — handled at sign-in time on Google's side, no app-level 2FA needed (was an open question in the stack decision doc — now resolved by Google-only auth).
+- No password reset flow in the app — Google handles forgotten-password / account-recovery on their side.
+- If the trainer revokes the Google authorization grant (via the app's "Sign out & revoke" action OR Google's account dashboard), the next request invalidates the session and they're logged out. Existing attendance records remain in the database — recoverable on next sign-in (the same Google account = same `trainer_id` per Google's stable user ID claim).
+- The eventual multi-trainer / subcontractor extension will require a richer access model. Each trainer would sign in with their own Google account; data isolation is per-trainer via `trainer_id` discipline. This is post-MVP; the v1 design does not box itself out of that future.
+- If a future scenario requires a trainer without a Google account (e.g. corporate Microsoft-only environment, GDPR-conscious user wanting non-Google identity), email + password can be added as a SECOND identity provider in v2 — Better Auth supports both simultaneously. v1 explicitly excludes this.
 
 ## Non-Goals
 

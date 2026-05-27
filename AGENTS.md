@@ -14,13 +14,15 @@ Every database query function takes `trainerId` as its **first argument** and fi
 
 > Source: `docs/analyzes/project-structure-trainer-advisor-decision.md` § Database layer + § Authorization.
 
-### Google OAuth is read-only and the refresh token is encrypted
+### Google is the sole identity provider; OAuth is read-only; refresh token is encrypted
 
-The OAuth grant requested is **read-only on Google Calendar events**. The app never creates, updates, or deletes calendar events. If a code path needs a write scope, stop and ask — adding scope is a product decision, not an implementation detail.
+**Identity**: Better Auth is configured with `emailAndPassword.enabled: false` and Google as the only `socialProvider`. There is no register form, no password-reset flow, no app-sent emails in v1. Trainer signs in via Google → trainer row created/restored on the same flow.
 
-OAuth refresh tokens are stored in `trainer_google_tokens` as `(nonce BYTEA, ciphertext BYTEA)` encrypted with libsodium. Never persist a raw refresh token. The encryption key is read from an environment variable, never committed.
+**Scope**: The Google OAuth grant requested is **read-only on Google Calendar events** (`calendar.events.readonly`). The app never creates, updates, or deletes calendar events. If a code path needs a write scope, stop and ask — adding scope is a product decision, not an implementation detail.
 
-> Source: `docs/product-spec.md` § Access Control; `docs/analyzes/project-structure-trainer-advisor-decision.md` § Database layer.
+**Token storage**: OAuth refresh tokens are stored in `trainer_google_tokens` as `(nonce BYTEA, ciphertext BYTEA)` encrypted with libsodium `crypto_secretbox`. Never persist a raw refresh token. The encryption key is read from `LIBSODIUM_MASTER_KEY` env var, never committed.
+
+> Source: `docs/product-spec.md` § Authentication + § Access Control; `docs/analyzes/project-structure-trainer-advisor-decision.md` § Database layer.
 
 ### Attendance is binary; revenue uses snapshot rate; attendance follows the event
 

@@ -1,7 +1,7 @@
 ---
 id: T-006
 title: Resend account + domain SPF/DKIM verification
-status: pending
+status: obsolete
 plan: ../plan-v2.md
 created: 2026-05-25
 completed: null
@@ -10,6 +10,16 @@ depends_on: [T-001, T-003]
 blocks: [T-009]
 plan_anchor: A6-email-sender
 ---
+
+## Obsoleted on 2026-05-27
+
+PRD FR-001 was simplified to Google-only auth (single sign-on via Google OAuth — see `docs/product-spec.md` § Authentication and `docs/roadmap.md` § F-02). No more email/password sign-up, no password-reset flow, no app-sent emails in v1. Resend is therefore not required by F-02 or any current slice.
+
+Reconsider if/when a v1 use case for app-sent email emerges:
+- Nightly backup failure notifications from F-03 (could go via Slack/Discord webhook or UptimeRobot 5xx alert instead — Resend isn't the only path)
+- Future v2 features (subcontractor invitations, monthly summary auto-send) — would need Resend then, but those are explicit v2 Non-Goals
+
+Tombstone, not lost work. The original task body below is preserved for the future re-evaluation.
 
 ## Scope
 

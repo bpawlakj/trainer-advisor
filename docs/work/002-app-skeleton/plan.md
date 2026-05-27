@@ -7,9 +7,9 @@
 F-02 is the second foundation (after F-01 infrastructure bootstrap). It transforms the bare Next.js scaffold currently in `src/` (just default `layout.tsx`, `page.tsx`, `/api/health/route.ts`) into a working app skeleton with five concerns wired together:
 
 - **Database** — Drizzle ORM with 7-table multi-tenant schema, two Supavisor connections (pooled for app at port 6543 with `prepare: false`, direct for migrations at port 5432)
-- **Auth** — Better Auth with Google OAuth (read-only Calendar scope only) + email/password + libsodium-encrypted refresh tokens stored as `(nonce, ciphertext) bytea` columns
+- **Auth** — Better Auth with **Google as sole identity provider** (read-only Calendar scope, `encryptOAuthTokens` on) — NO email/password, NO register form, NO password-reset flow. libsodium-encrypted refresh tokens stored as `(nonce, ciphertext) bytea` columns. Single sign-in flow: trainer taps "Zaloguj przez Google" → Google consent screen → back to app, signed in + Calendar scope granted in one step.
 - **i18n** — next-intl with `[locale]` segment, single Polish messages catalog (`src/messages/pl.json`), `Europe/Warsaw` timezone forced server-side
-- **Routing** — Three route groups (`(marketing)`, `(auth)`, `(protected)`) with `requireAuth()` per-page guard; middleware does optimistic cookie check + locale resolution
+- **Routing** — Three route groups (`(marketing)`, `(auth)`, `(protected)`) with `requireAuth()` per-page guard; middleware does optimistic cookie check + locale resolution. `(auth)/login` is a single Google button — no `register` or `reset-password` subroutes.
 - **Sync stub** — `/api/sync` endpoint that pg_cron will hit every 5 min via pg_net; no-op until S-02 (just authenticates the caller + logs)
 
 F-02 is **blocked on F-01 (local-dev unblockers)** being done — see [`docs/work/003-local-dev-unblockers/plan.md`](../003-local-dev-unblockers/plan.md). That's a small initiative (Supabase project + libsodium key in `.env.local`, ~30 min wall-clock). F-02 does NOT need F-03 (cloud deploy in `001-infra-bootstrap/`) — F-02 runs entirely on localhost against Supabase. Cloud deploy is a separate downstream milestone.
@@ -20,23 +20,24 @@ After F-02 lands, S-01 (Google connect + first sync) is unblocked. S-01 will be 
 
 | Concern | Choice | Source |
 |---|---|---|
-| Auth | Better Auth + `@better-auth/next-js`, `encryptOAuthTokens: true`, Google scope `calendar.events.readonly` only | language-and-infrastructure-stack-decision.md:45 |
+| Auth | Better Auth + `@better-auth/next-js`, `encryptOAuthTokens: true`, **Google ONLY** (no email/password), scope `calendar.events.readonly` | language-and-infrastructure-stack-decision.md:45 + PRD FR-001 (Google-only) |
 | Token encryption | `libsodium-wrappers` `crypto_secretbox` (XSalsa20-Poly1305), 32-byte master key from env | language-and-infrastructure-stack-decision.md:82 |
 | ORM | Drizzle (`generate`+`migrate` only — never `push` in production) | project-structure-trainer-advisor-decision.md:87 |
 | DB driver | `postgres` (postgres-js) with `prepare: false` for Supavisor transaction mode | project-structure-trainer-advisor-decision.md:91 |
 | i18n | next-intl, `localePrefix: 'as-needed'`, single locale `pl` in v1 | project-structure-trainer-advisor-decision.md:127 |
-| Email sender | Resend (React Email templates deferred — minimal plain-text password reset for now) | language-and-infrastructure-stack-decision.md |
+| Email sender | **Not needed in F-02** (no password-reset emails — Google handles identity recovery). Resend deferred to F-03 or beyond, possibly skipped entirely. | (PRD FR-001 simplification) |
 | Validation | Zod (env schema + form parsing) | (convention) |
 
 ## Phase A — Packages + env schema
 
 **A1.** Install missing packages in one `pnpm add` call:
-- Runtime: `better-auth`, `drizzle-orm`, `postgres`, `libsodium-wrappers`, `next-intl`, `zod`, `resend`
+- Runtime: `better-auth`, `drizzle-orm`, `postgres`, `libsodium-wrappers`, `next-intl`, `zod`
 - Dev (`pnpm add -D`): `drizzle-kit`, `@types/libsodium-wrappers`
+- **Not installed**: `resend` (Google handles identity, no app-sent emails needed in v1). Add if/when F-03 introduces backup-failure notifications or similar.
 
 **A2.** Create `src/env.ts` — Zod schema parsing `process.env`. Fail-fast on missing keys with named error. Export typed `env`. **All other modules import `env`, never `process.env` directly.**
 
-**A3.** Sync `.env.example` (created by F-01) with F-02 vars. Most already exist from F-01 contract (`BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_*`, `LIBSODIUM_MASTER_KEY`, `RESEND_*`, `SUPABASE_*_URL`). Add `PG_NET_TOKEN` (Phase E1).
+**A3.** Sync `.env.example` (created by F-01) with F-02 vars. Required: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `LIBSODIUM_MASTER_KEY`, `SUPABASE_*_URL`. Add `PG_NET_TOKEN` (Phase E1). `RESEND_*` removed from required (no email sending in v1 — Google handles identity recovery).
 
 ## Phase B — Database (Drizzle + Supavisor)
 
@@ -70,8 +71,8 @@ Master key from `env.LIBSODIUM_MASTER_KEY` (32-byte hex → Buffer). Await `sodi
 
 **C2.** Create `src/lib/auth.ts` — Better Auth instance:
 - Drizzle adapter pointing at `db` from `src/db/index.ts`
-- Email/password enabled with reset-by-email (sends via Resend with minimal plain-text template — React Email deferred)
-- Google provider with `scopes: ['https://www.googleapis.com/auth/calendar.events.readonly']` (read-only, no write scope ever) and `encryptOAuthTokens: true`
+- **`emailAndPassword.enabled: false`** — explicit. No register form, no reset-password flow, no app-sent emails.
+- **Google as sole `socialProvider`** with `scopes: ['https://www.googleapis.com/auth/calendar.events.readonly']` (read-only, no write scope ever) and `encryptOAuthTokens: true`
 - Custom encryption callback using `encryptToken` / `decryptToken` from C1 — stores refresh-token `(nonce, ciphertext)` into `trainer_google_tokens` rows
 - DB-backed sessions (no `cookieCache` plugin yet — deferred until latency measured)
 
@@ -89,16 +90,16 @@ Master key from `env.LIBSODIUM_MASTER_KEY` (32-byte hex → Buffer). Await `sodi
 
 **D2.** Create `src/i18n/request.ts` — `getRequestConfig` returning `{ messages: import('../messages/pl.json'), timeZone: 'Europe/Warsaw' }`. Always-Warsaw is required by NFR.
 
-**D3.** Create `src/messages/pl.json` — seed catalog with namespaces: `Common`, `Marketing`, `Auth`, `Today`. Keys for the scaffold landing page + login/register/reset forms + protected `/today` placeholder. Each future slice extends this file as it ships.
+**D3.** Create `src/messages/pl.json` — seed catalog with namespaces: `Common`, `Marketing`, `Auth`, `Today`. `Auth` has ONLY `login` keys (title + Google CTA + error states) — no `register`, no `resetPassword`. Keys cover marketing landing + single login button + protected `/today` placeholder. Each future slice extends this file as it ships.
 
 **D4.** Restructure `src/app/`:
 - Move `src/app/layout.tsx` → `src/app/[locale]/layout.tsx` (wrap children in `NextIntlClientProvider`, set `<html lang={locale}>`)
-- Move `src/app/page.tsx` → `src/app/[locale]/(marketing)/page.tsx`
+- Move `src/app/page.tsx` → `src/app/[locale]/(marketing)/page.tsx` (lands with "Zaloguj przez Google" CTA)
 - Create `src/app/[locale]/(marketing)/layout.tsx` — public layout (header with Sign-in CTA, no auth check)
-- Create `src/app/[locale]/(auth)/{login,register,reset-password}/page.tsx` — form skeletons using Better Auth client
+- Create `src/app/[locale]/(auth)/login/page.tsx` — **single** Google sign-in button via Better Auth client (`authClient.signIn.social({ provider: 'google' })`). NO register, NO reset-password subroutes.
 - Create `src/app/[locale]/(auth)/layout.tsx` — centered card layout, no auth check
 - Create `src/app/[locale]/(protected)/layout.tsx` — calls `requireAuth()` server-side **per page**, per AGENTS.md rule
-- Create `src/app/[locale]/(protected)/today/page.tsx` — placeholder "Connect Google to populate" (real S-01 work)
+- Create `src/app/[locale]/(protected)/today/page.tsx` — placeholder ("Today: empty state, signed in successfully" — real Google sync logic is S-01 work)
 
 **D5.** Create `src/middleware.ts`:
 - Compose next-intl's `createMiddleware(routing)` with Better Auth's `getSessionCookie` optimistic check
@@ -187,7 +188,7 @@ End-to-end smoke test after F-02 is implemented. All 10 must pass before flippin
 2. **Env schema fails fast:** `pnpm dev` with a missing env var (e.g., delete `BETTER_AUTH_SECRET` from `.env.local`) crashes before serving any request with a Zod error naming the missing key.
 3. **DB migration applied:** `psql $SUPABASE_DIRECT_URL -c "\dt"` shows all 9 tables. `\d clients` shows `trainer_id` is `NOT NULL`. `\d trainer_google_tokens` shows `nonce bytea NOT NULL`, `ciphertext bytea NOT NULL`.
 4. **Supavisor pooled connection works:** `pnpm dev`, hit `/api/health` → 200 (proves no prepared-statement errors). If `prepare: false` is missing from `src/db/index.ts`, this fails on first DB query with a Supavisor error.
-5. **Sign-up via email/password:** Visit `/login`, click "Register", enter email + password, submit → row appears in `trainers` (or whatever Better Auth's primary user table is named). Reset-password email arrives via Resend (use a real email; check inbox).
+5. **Google sign-in flow scaffolded:** Visit `/login` → single "Zaloguj przez Google" button visible. Clicking it redirects to Google's consent screen (full OAuth completion + token encryption check is **deferred to S-01 verification** — F-02 just proves the button + redirect work). NO register form, NO reset-password link visible anywhere in the UI.
 6. **Sign-in + protected redirect:** Sign out. Visit `/today` → middleware redirects to `/login`. Sign in → `/today` renders Polish placeholder text.
 7. **Google provider scaffolded:** Better Auth config has Google provider with `scopes: ['https://www.googleapis.com/auth/calendar.events.readonly']` declared. **Full OAuth-flow verification (real consent screen + token encryption + bytea-in-DB check) is deferred to S-01 verification** — it requires a Google Cloud Console OAuth client which is S-01 setup work, not F-02.
 8. **`trainer_google_tokens` table accepts bytea writes:** unit test or psql insert proves the table schema accepts `(nonce, ciphertext)` bytea pair without errors. End-to-end "real Google token lands encrypted" check is in S-01.
@@ -196,7 +197,7 @@ End-to-end smoke test after F-02 is implemented. All 10 must pass before flippin
 
 If all 10 pass: F-02 status → `done` in `docs/roadmap.md`. S-01 unblocked. STATUS.md auto-regenerates on the F-02 initiative's last task commit.
 
-Note: verification step 5 mentions "Reset-password email arrives via Resend" — for **local dev**, Better Auth can be configured to log password-reset URLs to console instead of sending real emails. Real Resend integration is exercised when F-03 (cloud deploy) lands + Resend domain DKIM is verified. Adjust step 5 expectation: in pure local mode, watch the console output for the reset URL; real-email send is F-03 verification material.
+Note: step 5 verifies the Google sign-in BUTTON + redirect, not the full OAuth round-trip. To complete a real Google OAuth from localhost you need a Google Cloud Console OAuth client configured with `http://localhost:3000/api/auth/callback/google` as authorized redirect URI — that's S-01 setup work, not F-02. F-02 stops at "button exists and redirect happens" — full token-encryption verification (step 8) is also S-01.
 
 ## Out of scope for this plan
 

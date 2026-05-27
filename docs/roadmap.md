@@ -11,8 +11,8 @@ Trainer Advisor is a Polish-language, mobile-first PWA that turns Google Calenda
 - **Unlocks:** F-02
 - **Status:** ready (small initiative, see `docs/work/003-local-dev-unblockers/`)
 
-### F-02: App skeleton — Better Auth, Drizzle schema, next-intl, route groups
-- **Outcome:** Better Auth configured with `encryptOAuthTokens` and Google provider (read-only Calendar scope only); libsodium `crypto_secretbox` helper for refresh-token at-rest encryption; Drizzle 7-table schema in `src/db/schema/` generated and migrated against Supabase (every business table has `trainer_id NOT NULL` from day one); Supavisor pooled connection (`prepare: false`) for app, direct connection for migrations; next-intl wired with `[locale]` segment and `src/messages/pl.json` as the single Polish string catalog; route groups `(marketing)`, `(auth)`, `(protected)` scaffolded with a working `requireAuth()` per-page guard; pg_cron + pg_net job calling `/api/sync` every 5 min defined but no-op until S-02. **Runs locally end-to-end** — no cloud deploy required.
+### F-02: App skeleton — Better Auth (Google-only), Drizzle schema, next-intl, route groups
+- **Outcome:** Better Auth configured with `encryptOAuthTokens` and **Google as the sole identity provider** (read-only Calendar scope — no email+password, no register form, no password-reset flow); libsodium `crypto_secretbox` helper for refresh-token at-rest encryption; Drizzle 7-table schema in `src/db/schema/` generated and migrated against Supabase (every business table has `trainer_id NOT NULL` from day one); Supavisor pooled connection (`prepare: false`) for app, direct connection for migrations; next-intl wired with `[locale]` segment and `src/messages/pl.json` as the single Polish string catalog; route groups `(marketing)`, `(auth)`, `(protected)` scaffolded with a working `requireAuth()` per-page guard; `(auth)/login` is a single "Zaloguj przez Google" button; pg_cron + pg_net job calling `/api/sync` every 5 min defined but no-op until S-02. **Runs locally end-to-end** — no cloud deploy required.
 - **Unlocks:** S-01, S-02, S-03, S-04
 - **Status:** ready (blocked on F-01 done, see `docs/work/002-app-skeleton/`)
 
@@ -27,8 +27,8 @@ Trainer Advisor is a Polish-language, mobile-first PWA that turns Google Calenda
 >
 > Dev-time guards (Biome, Lefthook, structured logging beyond `console.log`, observability beyond UptimeRobot) are **overlapping work** done inside F-02 and refined during slices — they do not get their own Foundation row because they unlock nothing concrete and "orphan foundations" are an explicit code smell in the roadmap contract.
 
-### S-01: Trainer connects Google and sees their calendar events
-- **Outcome:** Trainer lands on the daily view (empty state if not yet connected), taps the connect-Google CTA, completes OAuth in the system browser (NOT in-app webview per US-03 acceptance), returns to the app and within ≤5 min sees today's calendar events listed. On first sync, every distinct attendee email becomes a `client` row owned by the trainer (FR-009 mapping); attendees without email are skipped pending resolution of Open Roadmap Question 3. The refresh token is stored encrypted at rest in `trainer_google_tokens(nonce, ciphertext)`. No attendance UI yet — just "I can see my sessions."
+### S-01: Trainer signs in with Google and sees their calendar events
+- **Outcome:** Trainer lands on marketing page, taps "Zaloguj przez Google", completes OAuth in the system browser (NOT in-app webview per US-03 acceptance) — granting `calendar.events.readonly` scope in the SAME consent screen. On return, trainer is signed in (auto-create on first sign-in, restore on subsequent) and within ≤5 sec sees today's calendar events listed. On first sync, every distinct attendee email becomes a `client` row owned by the trainer (FR-009 mapping); attendees without email are skipped pending resolution of Open Roadmap Question 3. The refresh token is stored encrypted at rest in `trainer_google_tokens(nonce, ciphertext)`. No attendance UI yet — just "I signed in, I see my sessions." Auth + first-sync are **the same slice** (merged from old US-03 "connect Google" — now there's no separate connect step).
 - **Change ID:** `google-connect-and-first-sync`
 - **PRD refs:** US-03, FR-001, FR-002, FR-003, FR-008, FR-009, FR-010
 - **Prerequisites:** F-01, F-02

@@ -60,11 +60,33 @@ export default async function LocaleLayout({
 
 ### 3. Create the three group layouts
 
-`src/app/[locale]/(marketing)/layout.tsx` — public layout (header with Sign-in CTA), no auth check.
+`src/app/[locale]/(marketing)/layout.tsx` — public layout (header with "Zaloguj przez Google" CTA), no auth check.
 
-`src/app/[locale]/(auth)/layout.tsx` — centered card layout for login/register/reset-password.
+`src/app/[locale]/(auth)/layout.tsx` — centered card layout for the single login page.
 
-`src/app/[locale]/(auth)/login/page.tsx`, `register/page.tsx`, `reset-password/page.tsx` — form skeletons using Better Auth's React client (`createAuthClient` from `better-auth/react`). Minimal forms — full styling lands later.
+`src/app/[locale]/(auth)/login/page.tsx` — **single Google sign-in button**. NO register subroute, NO reset-password subroute, NO email/password form. Calls Better Auth React client (`authClient.signIn.social({ provider: 'google' })` from `better-auth/react`):
+
+```tsx
+'use client';
+import { useTranslations } from 'next-intl';
+import { authClient } from '@/lib/auth-client';
+
+export default function LoginPage() {
+  const t = useTranslations('Auth.login');
+  return (
+    <main>
+      <h1>{t('title')}</h1>
+      <p>{t('ctaSubline')}</p>
+      <button
+        type="button"
+        onClick={() => authClient.signIn.social({ provider: 'google', callbackURL: '/today' })}
+      >
+        {t('ctaGoogle')}
+      </button>
+    </main>
+  );
+}
+```
 
 `src/app/[locale]/(protected)/layout.tsx`:
 
@@ -148,7 +170,9 @@ export default withNextIntl(nextConfig);
 - [ ] `src/app/[locale]/layout.tsx` exists, wraps children in `NextIntlClientProvider`, sets `<html lang={locale}>`
 - [ ] Three route groups exist under `src/app/[locale]/`: `(marketing)`, `(auth)`, `(protected)`
 - [ ] `(protected)/layout.tsx` calls `requireAuth()`
-- [ ] `(auth)/login/page.tsx`, `register/page.tsx`, `reset-password/page.tsx` exist as form skeletons
+- [ ] `(auth)/login/page.tsx` exists with a SINGLE "Zaloguj przez Google" button
+- [ ] NO `(auth)/register/` directory or files
+- [ ] NO `(auth)/reset-password/` directory or files
 - [ ] `(protected)/today/page.tsx` renders Polish placeholder from `pl.json`
 - [ ] `src/middleware.ts` exists, composes next-intl middleware with Better Auth cookie check
 - [ ] `next.config.ts` wraps config with `withNextIntl('./src/i18n/request.ts')`
@@ -165,8 +189,8 @@ export default withNextIntl(nextConfig);
   import { createAuthClient } from 'better-auth/react';
   export const authClient = createAuthClient();
   ```
-  Use `authClient.signIn.email({ email, password })` etc. in form `onSubmit` handlers.
-- Form skeleton minimum: HTML form with controlled `useState` inputs, calls `authClient.*`, displays inline error. Pretty styling is post-MVP.
+  Use `authClient.signIn.social({ provider: 'google', callbackURL: '/today' })` in the button's `onClick`. No email/password methods needed — `emailAndPassword.enabled: false` in T-006 means those methods are no-ops anyway.
+- Login page minimum: title + subline + single button. Pretty styling is post-MVP.
 - The middleware matcher excludes `/api/*` — auth route at `/api/auth/[...all]` is hit directly by Better Auth's React client, bypassing the i18n middleware.
 - `[locale]` segment wraps the WHOLE app — including `(protected)` and `(auth)`. So routes look like `/login`, `/register`, `/today` (no `/pl` prefix because `localePrefix: 'as-needed'`).
 - `getSessionCookie(req)` returns truthy if Better Auth's session cookie exists. It does NOT validate the session — that's `requireAuth()`'s job server-side. This is correct: middleware is fast/cheap, layout is authoritative.
