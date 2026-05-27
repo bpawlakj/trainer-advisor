@@ -1,10 +1,10 @@
 ---
 id: T-001
 title: Create Supabase project + enable extensions + capture connection strings
-status: pending
+status: done
 plan: ../plan.md
 created: 2026-05-27
-completed: null
+completed: 2026-05-27
 commit: null
 depends_on: []
 blocks: [F-02]
@@ -31,14 +31,20 @@ Stand up the Supabase project that will back local development. Output: two vali
 
 ## Acceptance
 
-- [ ] Supabase project visible in dashboard with region `Central EU (Frankfurt)`
-- [ ] `psql "$SUPABASE_DIRECT_URL" -c "SELECT version();"` returns a Postgres version line
-- [ ] `psql "$SUPABASE_DIRECT_URL" -c "SELECT extname FROM pg_extension WHERE extname IN ('pg_cron', 'pg_net');"` returns both rows
-- [ ] `psql "$SUPABASE_DATABASE_URL" -c "SELECT 1;"` returns `1` (pooled URL valid)
-- [ ] `.env.local` has `SUPABASE_DATABASE_URL=postgresql://postgres:...:6543/postgres?pgbouncer=true`
-- [ ] `.env.local` has `SUPABASE_DIRECT_URL=postgresql://postgres:...:5432/postgres`
-- [ ] DB password stored in password manager separately
-- [ ] `git check-ignore .env.local` exits 0
+- [x] Supabase project visible in dashboard with region `Central EU (Frankfurt)` — project ref `dwohtygymgrmfzeebyhg`
+- [x] `psql "$SUPABASE_DIRECT_URL" -c "SELECT version();"` returns a Postgres version line — verified 2026-05-27 in user's terminal (3/3 pass reported)
+- [x] `psql "$SUPABASE_DIRECT_URL" -c "SELECT extname FROM pg_extension WHERE extname IN ('pg_cron', 'pg_net');"` returns both rows
+- [x] `psql "$SUPABASE_DATABASE_URL" -c "SELECT 1;"` returns `1` (pooled URL valid via transaction-mode pooler at `aws-1-eu-central-1.pooler.supabase.com:6543`)
+- [x] `.env.local` has `SUPABASE_DATABASE_URL=postgresql://postgres.dwohtygymgrmfzeebyhg:...@aws-1-eu-central-1.pooler.supabase.com:6543/postgres` (note: newer Supabase pooler omits `?pgbouncer=true` — handled server-side; postgres-js still needs `prepare: false` in F-02)
+- [x] `.env.local` has `SUPABASE_DIRECT_URL=postgresql://postgres:...@db.dwohtygymgrmfzeebyhg.supabase.co:5432/postgres`
+- [x] DB password stored in password manager separately
+- [x] `git check-ignore .env.local` exits 0
+
+## Completion notes (2026-05-27)
+
+- psql installed locally via `brew install postgresql@17` (Homebrew formula, ~76 MB). Lives at `/opt/homebrew/opt/postgresql@17/bin/psql`. Standard install (not keg-only linking) — full path used in verification.
+- All 3 verification queries passed in user's terminal. No 4th `?pgbouncer=true` param in pooled URL is the new Supavisor v2 convention — works the same.
+- F-02 unblocked partially (still needs T-002 libsodium key in `.env.local`).
 
 ## Notes
 
