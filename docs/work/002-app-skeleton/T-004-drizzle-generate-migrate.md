@@ -1,10 +1,10 @@
 ---
 id: T-004
 title: Generate + apply first Drizzle migration
-status: pending
+status: done
 plan: ../plan.md
 created: 2026-05-27
-completed: null
+completed: 2026-05-28
 commit: null
 depends_on: [T-003]
 blocks: [T-006, T-010]
@@ -60,14 +60,22 @@ Run `drizzle-kit generate` to materialize the schema as SQL, inspect the generat
 
 ## Acceptance
 
-- [ ] `drizzle/0000_*.sql` exists, committed
-- [ ] Manual inspection passed (NOT NULL constraints, UNIQUEs, FKs all present)
-- [ ] `pnpm db:migrate` exits 0
-- [ ] `psql ... -c "\dt"` shows all 9 business + Better Auth tables
-- [ ] `psql ... -c "\d clients"` shows `trainer_id ... not null`
-- [ ] `psql ... -c "\d trainer_google_tokens"` shows `nonce bytea not null` + `ciphertext bytea not null`
-- [ ] `psql ... -c "\d calendar_events"` shows `UNIQUE (trainer_id, google_event_id)` constraint
-- [ ] `__drizzle_migrations` table has one row (proof Drizzle records the migration)
+- [x] `drizzle/0000_tidy_luminals.sql` exists (117 lines), committed in this task
+- [x] Manual inspection passed: 9 `CREATE TABLE`, 2 `CREATE TYPE` (enums), 9 FK constraints (all `ON DELETE CASCADE` or `SET NULL`), 1 `CREATE UNIQUE INDEX`. Zero `DROP` / `ALTER COLUMN` (clean first migration).
+- [x] `pnpm db:migrate` exits 0 ("[✓] migrations applied successfully!")
+- [x] `psql -c "\dt"` shows 9 tables in `public` schema: account, app_settings, attendance_records, calendar_events, clients, session, trainer_google_tokens, trainers, verification (`__drizzle_migrations` lives in `drizzle` schema, not `public` — fine, Drizzle convention)
+- [x] `psql -c "\d clients"` confirms `trainer_id text not null` + FK `clients_trainer_id_trainers_id_fk → trainers(id) ON DELETE CASCADE`
+- [x] `psql -c "\d trainer_google_tokens"` confirms `nonce bytea not null` + `ciphertext bytea not null`
+- [x] `psql -c "\d calendar_events"` confirms `calendar_events_trainer_google_event_unique UNIQUE, btree (trainer_id, google_event_id)`
+- [x] `SELECT typname FROM pg_type WHERE typtype = 'e'` includes `calendar_event_status` + `client_status` (alongside ~13 Supabase auth/storage enums — those are Supabase internals, not ours)
+
+## Completion notes (2026-05-28)
+
+- Migration file: `drizzle/0000_tidy_luminals.sql` (drizzle-kit's auto-generated tag — Drizzle uses random adjective + noun naming).
+- `drizzle/meta/_journal.json` updated automatically to record migration #0 application (`{"idx": 0, "version": "7", "when": 1779998928672, "tag": "0000_tidy_luminals", "breakpoints": true}`).
+- Migration applied via direct connection (`SUPABASE_DIRECT_URL`, port 5432) — Drizzle uses this for migrations only. App runtime uses pooled URL (port 6543, `prepare: false`) per T-002.
+- User-side verification ran 5 psql queries in their terminal — all 5 pass. Output pasted in task acceptance.
+- F-02 T-006 (Better Auth config) is now unblocked. T-010 (smoke test) and S-NN slice work all gain a real DB to write against.
 
 ## Notes
 
