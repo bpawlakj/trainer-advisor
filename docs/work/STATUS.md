@@ -6,7 +6,9 @@
 
 ## Active
 
-_None._
+| ID | Initiative | Tasks (done/total) | Updated |
+|----|------------|---------------------|---------|
+| 002 | [app-skeleton](002-app-skeleton/) | 1/10 | 2026-05-28 |
 
 ## Backlog
 
@@ -14,7 +16,6 @@ _None._
 |----|------------|-------|---------|
 | 000 | [bootstrap](000-bootstrap/) | 0/0 (not atomized) | — |
 | 001 | [infra-bootstrap](001-infra-bootstrap/) | 0/12 | 2026-05-27 |
-| 002 | [app-skeleton](002-app-skeleton/) | 0/10 | 2026-05-27 |
 
 ## Done
 

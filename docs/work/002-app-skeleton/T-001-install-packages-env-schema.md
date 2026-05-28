@@ -1,10 +1,10 @@
 ---
 id: T-001
 title: Install packages + Zod env schema
-status: pending
+status: done
 plan: ../plan.md
 created: 2026-05-27
-completed: null
+completed: 2026-05-28
 commit: null
 depends_on: []
 blocks: [T-002, T-005, T-007, T-009]
@@ -58,13 +58,23 @@ Install all F-02 runtime + dev packages and create `src/env.ts` Zod schema that 
 
 ## Acceptance
 
-- [ ] `pnpm ls better-auth drizzle-orm postgres next-intl libsodium-wrappers zod` returns all with versions (no `(missing)`)
-- [ ] `pnpm ls resend` returns "no such package" or `(not installed)` (NOT installed — Google handles identity)
-- [ ] `pnpm ls drizzle-kit @types/libsodium-wrappers --depth=0` shows both as devDependencies
-- [ ] `src/env.ts` exists and exports `env` typed via Zod
-- [ ] Running `pnpm dev` with a missing env key (e.g. delete `BETTER_AUTH_SECRET` from `.env.local`) crashes with Zod's named error message before serving any request
-- [ ] `.env.example` lists the 9 required F-02 vars (no `RESEND_*` keys)
-- [ ] `.env.example` is committed; `.env.local` is gitignored (already done in M1L5)
+- [x] `pnpm ls better-auth drizzle-orm postgres next-intl libsodium-wrappers zod` returns all with versions (6/6, no `(missing)`) — verified 2026-05-28
+- [x] `pnpm ls resend` returns empty (NOT installed — Google handles identity)
+- [x] `pnpm ls drizzle-kit @types/libsodium-wrappers --depth=0` shows both as devDependencies (plus `tsx@4.22.3` added for ad-hoc TS script runs — useful tool, ~1 MB)
+- [x] `src/env.ts` exists (31 lines) and exports `env` typed via Zod
+- [x] Running `node --import tsx/esm -e "import('./src/env.ts')"` with `BETTER_AUTH_SECRET` unset crashes with Zod's named error: `BETTER_AUTH_SECRET: Invalid input: expected string, received undefined` — fail-fast verified
+- [x] Same with bad `LIBSODIUM_MASTER_KEY` format → `Invalid string: must match pattern /^[0-9a-f]{64}$/`
+- [x] `.env.example` lists the 9 required F-02 keys (verified by grep count) — no `RESEND_*` keys present
+- [x] `.env.example` is committed; `.env.local` is gitignored (verified `git check-ignore`)
+
+## Completion notes (2026-05-28)
+
+- Runtime packages installed: better-auth@1.6.11, drizzle-orm@0.45.2, libsodium-wrappers@0.8.4, next-intl@4.12.0, postgres@3.4.9, zod@4.4.3
+- Dev packages: drizzle-kit@0.31.10, @types/libsodium-wrappers@0.8.2, tsx@4.22.3 (added for sanity-test script runs against env.ts — not strictly required, but useful enough to keep)
+- pnpm build-script approval: `pnpm-workspace.yaml` updated to include `@parcel/watcher`, `@swc/core`, `esbuild` (transitive deps with native compile steps). Standard pnpm 11 dance — without approval, build scripts get skipped silently and dev/build still works but slower (no native file watcher, no native SWC).
+- `BETTER_AUTH_SECRET` and `PG_NET_TOKEN` generated locally via `openssl rand -hex 32` (per F-02 plan + AGENTS.md "32-byte hex" convention). Both saved in `.env.local`. **Reminder to user**: back both up to password manager — same rotation discipline as `LIBSODIUM_MASTER_KEY` (lose them = invalidate sessions / break sync auth gate).
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set as empty strings in `.env.local`. Zod schema uses `.default('')` for both — F-02 boots without real Google credentials. S-01 will tighten these to `.min(1)` AND populate real values from Google Cloud Console.
+- `src/env.ts` uses `safeParse` + early-throw pattern. Importing it anywhere in the app triggers validation once; thrown error message names every missing/invalid key before any HTTP request lands.
 
 ## Notes
 
