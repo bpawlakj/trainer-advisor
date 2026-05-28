@@ -8,7 +8,7 @@
 
 | ID | Initiative | Tasks (done/total) | Updated |
 |----|------------|---------------------|---------|
-| 002 | [app-skeleton](002-app-skeleton/) | 2/10 | 2026-05-28 |
+| 002 | [app-skeleton](002-app-skeleton/) | 3/10 | 2026-05-28 |
 
 ## Backlog
 

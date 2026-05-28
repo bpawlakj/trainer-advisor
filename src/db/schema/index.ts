@@ -1,5 +1,14 @@
-// Schema barrel — populated in T-003 with all table modules:
-//   trainers, trainer_google_tokens, clients, calendar_events,
-//   attendance_records, app_settings, session, account, verification
-// Empty for now so drizzle-kit doesn't fail on missing schema dir.
-export {};
+// Schema barrel — re-exports every table + relations + enums.
+// Drizzle's `db` instance (src/db/index.ts) spreads this into its `schema`
+// option so `db.query.<tableName>` works for typed reads.
+
+export * from './trainers';
+export * from './trainer_google_tokens';
+export * from './clients';
+export * from './calendar_events';
+export * from './attendance_records';
+export * from './app_settings';
+export * from './session';
+export * from './account';
+export * from './verification';
+export * from './relations';

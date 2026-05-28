@@ -1,10 +1,10 @@
 ---
 id: T-003
 title: Drizzle schema — 9 table files + barrel + relations
-status: pending
+status: done
 plan: ../plan.md
 created: 2026-05-27
-completed: null
+completed: 2026-05-28
 commit: null
 depends_on: [T-002]
 blocks: [T-004, T-006]
@@ -44,16 +44,30 @@ Primary keys: use `gen_random_uuid()` (pgcrypto, built-in to Postgres). UUID v7 
 
 ## Acceptance
 
-- [ ] All 9 schema files exist under `src/db/schema/`
-- [ ] `src/db/schema/index.ts` re-exports every table
-- [ ] `src/db/schema/relations.ts` defines relations between business tables
-- [ ] `src/db/types.ts` exports `TrainerId` branded type
-- [ ] Every business table (clients, calendar_events, attendance_records, app_settings, trainer_google_tokens) has `trainer_id NOT NULL` in TS schema definition
-- [ ] `calendar_events` has `UNIQUE(trainer_id, google_event_id)` constraint
-- [ ] `attendance_records.calendar_event_id` has `UNIQUE` (1:1 with calendar_events)
-- [ ] `trainer_google_tokens.nonce` and `.ciphertext` are `bytea NOT NULL`
-- [ ] `clients.email` is `NOT NULL` (per FR-004)
-- [ ] `pnpm tsc --noEmit` passes (no type errors in schema files)
+- [x] All 9 schema files exist under `src/db/schema/` — trainers, trainer_google_tokens, clients, calendar_events, attendance_records, app_settings, session, account, verification
+- [x] `src/db/schema/index.ts` re-exports every table (real barrel, replaces stub from T-002)
+- [x] `src/db/schema/relations.ts` defines relations for 8 of 9 tables (verification has no FKs — Better Auth's adapter manages it standalone)
+- [x] `src/db/types.ts` exports `TrainerId` branded type with `readonly __brand` marker
+- [x] Every business table has `trainer_id NOT NULL` enforced: clients/calendar_events/attendance_records via `.notNull()`; trainer_google_tokens and app_settings via `.primaryKey()` (implicit NOT NULL)
+- [x] `calendar_events` has `uniqueIndex('calendar_events_trainer_google_event_unique').on(t.trainerId, t.googleEventId)` per FR-009 dedup
+- [x] `attendance_records.calendar_event_id` has `.unique()` (1:1 with calendar_events per FR-014)
+- [x] `trainer_google_tokens.nonce` and `.ciphertext` are `bytea` (via Drizzle `customType<{ data: Buffer; driverData: Buffer }>`) with `.notNull()`
+- [x] `clients.email` is `.notNull()` per FR-004 (GCal attendee mapping requires email)
+- [x] `pnpm exec tsc --noEmit` passes (no type errors)
+- [x] `pnpm exec drizzle-kit check` → "Everything's fine 🐶🔥" (schema is parseable by drizzle-kit)
+
+## Completion notes (2026-05-28)
+
+- **ID type strategy**: all PKs use `text('id').primaryKey()` to match Better Auth's adapter convention. Business tables use `.$defaultFn(() => crypto.randomUUID())` for client-side UUID generation. Better Auth tables (trainers, session, account, verification) accept Better Auth's nanoid-style ID generation.
+- **Timestamp strategy**: all `timestamp(..., { withTimezone: true })` (Postgres `timestamptz`). Stored as UTC, display conversion to Europe/Warsaw happens in React via next-intl. Matches NFR.
+- **`trainers` is Better Auth's renamed `user` table**: configured in T-006 via `betterAuth({ user: { modelName: 'trainers' } })`. Better Auth's adapter respects the rename when generating queries.
+- **`account.password` column kept** for Better Auth adapter compatibility even though `emailAndPassword.enabled: false` in v1. Stays NULL.
+- **`calendar_event_status` enum**: `confirmed | cancelled | deleted` — supports FR-010 orphan-flag flow (calendar event removed upstream, attendance record preserved as orphaned).
+- **`client_status` enum**: `active | inactive` — soft-delete only per FR-006.
+- **bytea custom type**: Drizzle 0.45 doesn't ship first-class bytea helper; defined inline in trainer_google_tokens.ts as `customType<{ data: Buffer; driverData: Buffer }>`.
+- **Relations cover 8 tables**: trainers ↔ {clients, calendar_events, attendance_records, googleTokens, settings, sessions, accounts} + back-references. verification has no relations (standalone Better Auth bookkeeping).
+- **Branded `TrainerId` type** lands at `src/db/types.ts` (separate from `schema/` because it's not a table). Per AGENTS.md critical rule: query functions in S-NN slices will take `trainerId: TrainerId` as first argument; cast happens once in `requireAuth()` helper (T-006).
+- **No actual DB migration yet** — that's T-004 (`pnpm db:generate` produces `drizzle/0000_*.sql`, then `pnpm db:migrate` applies it).
 
 ## Notes
 
