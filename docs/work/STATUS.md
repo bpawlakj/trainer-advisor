@@ -1,14 +1,12 @@
 # Initiative status
 
-> Auto-generated from `docs/work/*/`. Last updated: 2026-05-27.
+> Auto-generated from `docs/work/*/`. Last updated: 2026-05-28.
 > Maintained by `/save-plan`, `/atomize`, `/implement`. Manual edits are overwritten on the next run — to influence the table, change `plan.md` `status:` or task `T-*.md` `status:` frontmatter.
 > Top-down product sequencing (foundations + slices) lives at `docs/roadmap.md`, hand-edited.
 
 ## Active
 
-| ID | Initiative | Tasks (done/total) | Updated |
-|----|------------|---------------------|---------|
-| 003 | [local-dev-unblockers](003-local-dev-unblockers/) | 1/2 | 2026-05-27 |
+_None._
 
 ## Backlog
 
@@ -20,7 +18,9 @@
 
 ## Done
 
-_None._
+| ID | Initiative | Tasks | Closed |
+|----|------------|-------|--------|
+| 003 | [local-dev-unblockers](003-local-dev-unblockers/) | 2/2 | 2026-05-28 |
 
 ## Obsoleted
 

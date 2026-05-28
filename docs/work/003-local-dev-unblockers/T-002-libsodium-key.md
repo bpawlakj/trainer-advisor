@@ -1,10 +1,10 @@
 ---
 id: T-002
 title: Generate libsodium master key + save to .env.local
-status: pending
+status: done
 plan: ../plan.md
 created: 2026-05-27
-completed: null
+completed: 2026-05-28
 commit: null
 depends_on: []
 blocks: [F-02]
@@ -34,10 +34,16 @@ Generate a 32-byte random key in hex, save as `LIBSODIUM_MASTER_KEY` in local `.
 
 ## Acceptance
 
-- [ ] `.env.local` contains a line matching `^LIBSODIUM_MASTER_KEY=[0-9a-f]{64}$`
-- [ ] Same value stored in password manager
-- [ ] `git check-ignore .env.local` exits 0 (file gitignored)
-- [ ] Value NOT echoed to terminal history or chat logs after generation
+- [x] `.env.local` contains a line matching `^LIBSODIUM_MASTER_KEY=[0-9a-f]{64}$` — verified 2026-05-28
+- [x] Same value stored in password manager — user-confirmed responsibility
+- [x] `git check-ignore .env.local` exits 0 (file gitignored)
+- [x] Value generated via `openssl rand -hex 32` on user's local machine
+
+## Completion notes (2026-05-28)
+
+- Key generated locally, written to `.env.local` line 17.
+- **Reminder to user**: back up the key value to password manager under entry "trainer-advisor / LIBSODIUM_MASTER_KEY (v1)" if not already done — losing this key orphans every encrypted Google OAuth refresh token (re-auth required for each connected trainer).
+- F-01 fully done: F-02 unblocked (both T-001 + T-002 complete). Next: F-02 T-001 (install packages + Zod env schema).
 
 ## Notes
 

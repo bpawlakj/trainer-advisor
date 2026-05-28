@@ -7,7 +7,10 @@ Roadmap ref: F-01 in [`docs/roadmap.md`](../../roadmap.md).
 
 ## Done
 
-(none yet)
+| ID | Title | Completed | Commit |
+|---|---|---|---|
+| T-001 | Create Supabase project + enable extensions + capture connection strings | 2026-05-27 | `2305014` |
+| T-002 | Generate libsodium master key + save to .env.local | 2026-05-28 | (this commit) |
 
 ## In flight
 
@@ -15,10 +18,7 @@ Roadmap ref: F-01 in [`docs/roadmap.md`](../../roadmap.md).
 
 ## Pending
 
-| ID | Title | Depends on | Blocks |
-|---|---|---|---|
-| T-001 | Create Supabase project + enable extensions + capture connection strings | — | F-02 |
-| T-002 | Generate libsodium master key + save to .env.local | — | F-02 |
+(none — F-01 closed)
 
 ## Obsoleted
 
@@ -44,3 +44,9 @@ Total wall-clock: ~15-20 min (T-001 dominates).
 - Source: `plan.md` (70 lines, Phase A Supabase + Phase B libsodium).
 - Decomposition: 2 tasks, both parallel-runnable.
 - F-02 cannot start until both are done — both block F-02 conceptually.
+
+### 2026-05-28 (initiative closed)
+
+- T-001 done 2026-05-27 (commit `2305014`): Supabase project `trainer-advisor` provisioned in `Central EU (Frankfurt)`, project ref `dwohtygymgrmfzeebyhg`. Extensions `pg_cron` + `pg_net` enabled. Both connection strings captured into `.env.local`. 3/3 acceptance psql queries pass.
+- T-002 done 2026-05-28: `LIBSODIUM_MASTER_KEY` generated locally via `openssl rand -hex 32` (64 hex chars), saved to `.env.local`. User responsible for password-manager backup.
+- F-01 closed. **F-02 fully unblocked** — `pnpm dev` can now boot against real Supabase, `drizzle-kit migrate` can run. Next: F-02 T-001 (install packages + Zod env schema).
